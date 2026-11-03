@@ -1,4 +1,5 @@
 import logging
+import sys
 import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -104,6 +105,14 @@ async def tick(context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    # Windows-консоль по умолчанию в cp1251 — переводим вывод в UTF-8,
+    # чтобы print с эмодзи не падал (сообщения в Telegram и так идут по HTTP в UTF-8).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
