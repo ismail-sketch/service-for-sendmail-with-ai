@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColdMailer — панель рассылки</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+    background: #0f172a; color: #e2e8f0; display: flex; min-height: 100vh;
+  }
+  .sidebar {
+    width: 220px; background: #1e293b; padding: 20px; display: flex;
+    flex-direction: column; gap: 6px; flex-shrink: 0;
+  }
+  .sidebar h1 { font-size: 18px; margin: 0 0 16px; color: #38bdf8; }
+  .nav-btn {
+    padding: 10px 14px; border-radius: 8px; background: transparent; color: #cbd5e1;
+    border: none; text-align: left; cursor: pointer; font-size: 14px; transition: .15s;
+  }
+  .nav-btn:hover { background: #334155; }
+  .nav-btn.active { background: #0ea5e9; color: #fff; }
+  .main { flex: 1; padding: 28px 36px; max-width: 900px; }
+  .page { display: none; }
+  .page.active { display: block; }
+  h2 { margin-top: 0; font-size: 22px; }
+  label { display: block; margin: 14px 0 6px; font-size: 13px; color: #94a3b8; }
+  input, textarea, select {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #334155;
+    background: #1e293b; color: #e2e8f0; font-size: 14px; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 160px; }
+  input:focus, textarea:focus { outline: none; border-color: #38bdf8; }
+  .row { display: flex; gap: 14px; }
+  .row > div { flex: 1; }
+  button.primary {
+    margin-top: 20px; padding: 11px 22px; border-radius: 8px; border: none;
+    background: #0ea5e9; color: #fff; font-size: 15px; cursor: pointer; font-weight: 600;
+  }
+  button.primary:hover { background: #0284c7; }
+  button.primary:disabled { background: #475569; cursor: not-allowed; }
+  button.ghost {
+    padding: 10px 18px; border-radius: 8px; border: 1px solid #334155;
+    background: transparent; color: #cbd5e1; cursor: pointer; font-size: 14px;
+  }
+  button.ghost:hover { background: #334155; }
+  button.danger { border-color: #7f1d1d; color: #fca5a5; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 6px; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #334155; }
+  .tag.sent { background: #14532d; color: #86efac; }
+  .tag.error { background: #7f1d1d; color: #fca5a5; }
+  .tag.pending { background: #334155; color: #cbd5e1; }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #1e293b; }
+  th { color: #64748b; font-weight: 500; font-size: 12px; text-transform: uppercase; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: #1e293b; border-left: 4px solid #0ea5e9;
+    padding: 14px 18px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+    display: none; max-width: 360px; font-size: 14px;
+  }
+  .toast.show { display: block; }
+  .toast.err { border-left-color: #ef4444; }
+  .progress-wrap { margin-top: 24px; display: none; }
+  .progress-wrap.show { display: block; }
+  .bar { height: 12px; border-radius: 20px; background: #1e293b; overflow: hidden; }
+  .bar > div { height: 100%; width: 0; background: linear-gradient(90deg,#0ea5e9,#38bdf8); transition: width .3s; }
+  .log { margin-top: 16px; background: #020617; border-radius: 8px; padding: 14px; font-family: Consolas, monospace;
+         font-size: 13px; height: 260px; overflow-y: auto; line-height: 1.7; }
+  .log .ok { color: #86efac; }
+  .log .er { color: #fca5a5; }
+  .log .di { color: #fcd34d; }
+  .log .in { color: #94a3b8; }
+  .stats { display: flex; gap: 16px; margin-top: 18px; }
+  .stat { background: #1e293b; border-radius: 10px; padding: 14px 20px; flex: 1; text-align: center; }
+  .stat b { font-size: 24px; display: block; }
+  .file-row { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <h1>ColdMailer</h1>
+  <button class="nav-btn active" data-page="send">Рассылка</button>
+  <button class="nav-btn" data-page="leads">Контакты</button>
+  <button class="nav-btn" data-page="settings">Настройки</button>
+</div>
+
+<div class="main">
+
+  <!-- РАССЫЛКА -->
+  <div class="page active" id="page-send">
+    <h2>Запуск рассылки</h2>
+    <p class="hint">Письма отправляются по очереди с паузами. Повторно уже отправленным не уйдёт.</p>
+    <button class="primary" id="startBtn">Запустить рассылку</button>
+    <button class="ghost" id="testBtn" style="margin-left:10px">Проверить SMTP-соединение</button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="stats">
+        <div class="stat"><b id="statTotal">0</b>Всего</div>
+        <div class="stat"><b id="statSent">0</b>Отправлено</div>
+        <div class="stat"><b id="statErr">0</b>Ошибок</div>
+      </div>
+      <div class="bar" style="margin-top:18px"><div id="barFill"></div></div>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <!-- КОНТАКТЫ -->
+  <div class="page" id="page-leads">
+    <h2>Контакты</h2>
+    <p class="hint">Файл CSV с колонками: email, name, company, status. Статус можно не указывать — добавится сам.</p>
+    <div class="file-row">
+      <input type="file" id="csvFile" accept=".csv">
+      <button class="ghost" id="uploadBtn">Загрузить</button>
+      <button class="ghost danger" id="clearBtn">Очистить</button>
+    </div>
+    <div id="leadsTable"></div>
+  </div>
+
+  <!-- НАСТРОЙКИ -->
+  <div class="page" id="page-settings">
+    <h2>Настройки SMTP</h2>
+    <label>SMTP сервер</label>
+    <input id="smtp_host" placeholder="smtp.yandex.ru">
+    <div class="row">
+      <div>
+        <label>Порт</label>
+        <input id="smtp_port" type="number" placeholder="465">
+      </div>
+      <div>
+        <label>Логин (ваш email)</label>
+        <input id="smtp_user" placeholder="you@company.ru">
+      </div>
+    </div>
+    <label>Пароль приложения</label>
+    <input id="smtp_pass" type="password" placeholder="пароль приложения, не обычный пароль">
+    <p class="hint">Для Gmail/Yandex/Mail.ru нужно создать «пароль приложения» в настройках безопасности почты.</p>
+    <div class="row">
+      <div>
+        <label>Email отправителя</label>
+        <input id="sender_email" placeholder="you@company.ru">
+      </div>
+      <div>
+        <label>Имя отправителя</label>
+        <input id="sender_name" placeholder="Иван Иванов">
+      </div>
+    </div>
+
+    <h2 style="margin-top:36px">Текст письма</h2>
+    <label>Тема</label>
+    <input id="subject" placeholder="Вопрос по автоматизации для {{company}}">
+    <label>Текст</label>
+    <textarea id="body" placeholder="Привет, {{name}}! ..."></textarea>
+    <p class="hint">Доступные переменные: {{name}}, {{company}}, {{email}}, {{sender_name}}</p>
+
+    <div class="row">
+      <div>
+        <label>Пауза минимум (сек)</label>
+        <input id="delay_min" type="number">
+      </div>
+      <div>
+        <label>Пауза максимум (сек)</label>
+        <input id="delay_max" type="number">
+      </div>
+    </div>
+    <button class="primary" id="saveBtn">Сохранить настройки</button>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function toast(message, isError) {
+  const t = $("toast");
+  t.textContent = message;
+  t.className = "toast show" + (isError ? " err" : "");
+  setTimeout(() => t.className = "toast", 3500);
+}
+
+// --- Навигация ---
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    btn.classList.add("active");
+    $("page-" + btn.dataset.page).classList.add("active");
+    if (btn.dataset.page === "leads") loadLeads();
+  };
+});
+
+// --- Настройки ---
+async function loadSettings() {
+  const s = await (await fetch("/api/settings")).json();
+  ["smtp_host","smtp_port","smtp_user","smtp_pass","sender_email","sender_name",
+   "subject","body","delay_min","delay_max"].forEach(k => { if ($(k)) $(k).value = s[k] ?? ""; });
+}
+
+$("saveBtn").onclick = async () => {
+  const data = {};
+  ["smtp_host","smtp_port","smtp_user","smtp_pass","sender_email","sender_name",
+   "subject","body","delay_min","delay_max"].forEach(k => data[k] = $(k).value);
+  await fetch("/api/settings", {
+    method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(data)
+  });
+  toast("Настройки сохранены");
+};
+
+// --- Контакты ---
+async function loadLeads() {
+  const leads = await (await fetch("/api/leads")).json();
+  if (!leads.length || (leads.length === 1 && !leads[0].email)) {
+    $("leadsTable").innerHTML = "<p class='hint'>Список пуст. Загрузите CSV-файл.</p>";
+    return;
+  }
+  const cols = Object.keys(leads[0]);
+  let html = "<table><tr>" + cols.map(c => `<th>${c}</th>`).join("") + "</tr>";
+  leads.forEach(r => {
+    html += "<tr>" + cols.map(c => {
+      if (c === "status") {
+        const v = r[c] || "pending";
+        const label = v === "sent" ? "отправлено" : v === "error" ? "ошибка" : "ожидает";
+        return `<td><span class="tag ${v}">${label}</span></td>`;
+      }
+      return `<td>${r[c] ?? ""}</td>`;
+    }).join("") + "</tr>";
+  });
+  html += "</table>";
+  $("leadsTable").innerHTML = html;
+}
+
+$("uploadBtn").onclick = async () => {
+  const file = $("csvFile").files[0];
+  if (!file) return toast("Выберите файл", true);
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch("/api/leads/upload", { method: "POST", body: fd });
+  const data = await res.json();
+  if (data.error) return toast(data.error, true);
+  toast(`Загружено контактов: ${data.count}`);
+  loadLeads();
+};
+
+$("clearBtn").onclick = async () => {
+  if (!confirm("Очистить список контактов?")) return;
+  await fetch("/api/leads/clear", { method: "POST" });
+  toast("Список очищен");
+  loadLeads();
+};
+
+// --- Рассылка ---
+let total = 0, sent = 0, errors = 0, current = 0;
+
+function log(text, cls) {
+  const box = $("log");
+  const line = document.createElement("div");
+  line.className = cls || "in";
+  line.textContent = text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+$("startBtn").onclick = async () => {
+  const res = await fetch("/api/start", { method: "POST" });
+  const data = await res.json();
+  if (data.error) return toast(data.error, true);
+
+  $("progressWrap").classList.add("show");
+  $("startBtn").disabled = true;
+  $("log").innerHTML = "";
+  total = sent = errors = current = 0;
+  updateStats();
+  listenProgress();
+};
+
+$("testBtn").onclick = async () => {
+  toast("Проверка соединения...");
+  const res = await fetch("/api/test", { method: "POST" });
+  const data = await res.json();
+  toast(data.message || data.error, !!data.error);
+};
+
+function updateStats() {
+  $("statTotal").textContent = total;
+  $("statSent").textContent = sent;
+  $("statErr").textContent = errors;
+  const pct = total ? Math.round(((sent + errors) / total) * 100) : 0;
+  $("barFill").style.width = pct + "%";
+}
+
+function listenProgress() {
+  const es = new EventSource("/api/progress");
+  es.onmessage = (e) => {
+    const ev = JSON.parse(e.data);
+    if (ev.type === "start") { total = ev.total; log(`▶ Начало рассылки. Контактов: ${total}`, "in"); }
+    else if (ev.type === "sent") { sent++; log(`✔ ${ev.email} — отправлено`, "ok"); }
+    else if (ev.type === "skip") { log(`⏩ ${ev.email} — уже отправлено, пропуск`, "in"); }
+    else if (ev.type === "error") { errors++; log(`✖ ${ev.email} — ошибка: ${ev.message}`, "er"); }
+    else if (ev.type === "delay") { log(`⏳ пауза ${ev.seconds} сек...`, "di"); }
+    else if (ev.type === "done") {
+      log(`✨ Готово! Отправлено: ${ev.sent}, ошибок: ${ev.errors}`, "ok");
+      es.close();
+      $("startBtn").disabled = false;
+      updateStats();
+      loadLeads();
+    }
+    updateStats();
+  };
+  es.onerror = () => { es.close(); $("startBtn").disabled = false; };
+}
+
+loadSettings();
+</script>
+</body>
+</html>
