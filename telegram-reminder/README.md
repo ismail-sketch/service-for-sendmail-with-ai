@@ -22,8 +22,10 @@
 ## Шаг 1. Установить зависимости
 
 ```bash
-pip install -r requirements.txt
+py -m pip install -r requirements.txt
 ```
+
+> Бот работает на Windows через `py`. Если у тебя команда `python` тоже работает — можно использовать её.
 
 ---
 
@@ -38,13 +40,16 @@ pip install -r requirements.txt
 
 ## Шаг 3. Получить ключ LLM
 
-Выбери провайдера (оба совместимы):
+В проекте уже настроен **AnyModel** — агрегатор моделей с одним ключом и OpenAI-совместимым API
+(`https://anymodel.org/v1`).
 
-| Провайдер | Где взять ключ | Строки в `.env` |
-|---|---|---|
-| **OpenAI** | platform.openai.com → API keys | `LLM_BASE_URL=https://api.openai.com/v1`, `LLM_MODEL=gpt-4o-mini` |
-| **DeepSeek** | platform.deepseek.com → API keys | `LLM_BASE_URL=https://api.deepseek.com`, `LLM_MODEL=deepseek-chat` |
-| **OpenRouter** | openrouter.ai → Keys (много моделей) | `LLM_BASE_URL=https://openrouter.ai/api/v1`, `LLM_MODEL=<любая>` |
+1. Зарегистрируйся бесплатно: **https://anymodel.org/app/register**
+2. Открой дашборд **https://anymodel.org/app/dashboard** и скопируй **API-ключ**.
+3. Вставь его в `.env` в строку `LLM_API_KEY=`.
+
+Модель по умолчанию — `glm/glm-5.3-flash` (~$0.025 за 1M токенов, стабильная и быстрая).
+Если хочешь совсем бесплатно — поставь `LLM_MODEL=am/free`, но бесплатные модели иногда
+отвечают ошибкой соединения (тогда бот просто попросит повторить).
 
 ---
 
@@ -56,11 +61,11 @@ pip install -r requirements.txt
    ```
 2. Открой `.env` в блокноте и заполни:
    ```ini
-   BOT_TOKEN=123456789:AAE...   # токен из BotFather
-   LLM_API_KEY=sk-...          # ключ LLM
-   LLM_BASE_URL=https://api.openai.com/v1
-   LLM_MODEL=gpt-4o-mini
-   TIMEZONE=Europe/Moscow      # твой часовой пояс
+   BOT_TOKEN=123456789:AAE...          # токен из BotFather
+   LLM_API_KEY=sk-...                 # ключ AnyModel
+   LLM_BASE_URL=https://anymodel.org/v1
+   LLM_MODEL=glm/glm-5.3-flash        # или am/free (бесплатно, но нестабильно)
+   TIMEZONE=Europe/Moscow             # твой часовой пояс
    ```
 
 ---
@@ -68,8 +73,10 @@ pip install -r requirements.txt
 ## Шаг 5. Запустить бота
 
 ```bash
-python bot.py
+py bot.py
 ```
+
+Или просто дважды кликни по `start.bat`.
 
 Открой своего бота в Telegram, нажми `/start` и напиши, например:
 > Напомни позвонить маме завтра в 18:00
@@ -89,12 +96,12 @@ python bot.py
 
 Рекомендации для Windows:
 - Отключи «сон» в параметрах электропитания, пока бот нужен.
-- Чтобы бот работал даже после перезагрузки — добавь `python bot.py` в
+- Чтобы бот работал даже после перезагрузки — добавь `py bot.py` в
   **Планировщик заданий** (taskschd.msc → «Создать задачу» → триггер «При входе в систему»).
 
 ### Перенос на VPS (когда решишь)
 Ничего менять не нужно — просто скопируй папку на сервер, поставь зависимости и запусти
-`python bot.py` под `systemd`/`pm2`/`supervisor`. База `reminders.db` переезжает вместе с папкой.
+`py bot.py` под `systemd`/`pm2`/`supervisor`. База `reminders.db` переезжает вместе с папкой.
 
 ---
 
