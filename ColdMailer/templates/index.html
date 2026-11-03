@@ -56,21 +56,28 @@
   th { color: #64748b; font-weight: 500; font-size: 12px; text-transform: uppercase; }
   .toast {
     position: fixed; bottom: 24px; right: 24px; background: #1e293b; border-left: 4px solid #0ea5e9;
-    padding: 14px 18px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
-    display: none; max-width: 360px; font-size: 14px;
+    padding: 14px 40px 14px 18px; border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+    display: none; max-width: 360px; font-size: 14px; cursor: pointer;
   }
   .toast.show { display: block; }
   .toast.err { border-left-color: #ef4444; }
   .progress-wrap { margin-top: 24px; display: none; }
   .progress-wrap.show { display: block; }
   .status {
-    display: none; margin-top: 18px; padding: 13px 16px; border-radius: 8px;
+    display: none; margin-top: 18px; padding: 13px 40px 13px 16px; border-radius: 8px;
     font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    position: relative;
   }
   .status.show { display: block; }
   .status.ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
   .status.err { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
   .status.info { background: #0c4a6e; color: #7dd3fc; border: 1px solid #075985; }
+  .status-close, .toast-close {
+    position: absolute; top: 7px; right: 10px; background: none; border: none;
+    color: inherit; font-size: 18px; line-height: 1; cursor: pointer; opacity: .6;
+    padding: 2px 6px; border-radius: 4px;
+  }
+  .status-close:hover, .toast-close:hover { opacity: 1; background: rgba(255,255,255,.12); }
   .bar { height: 12px; border-radius: 20px; background: #1e293b; overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: linear-gradient(90deg,#0ea5e9,#38bdf8); transition: width .3s; }
   .log { margin-top: 16px; background: #020617; border-radius: 8px; padding: 14px; font-family: Consolas, monospace;
@@ -185,15 +192,35 @@ const $ = (id) => document.getElementById(id);
 
 function toast(message, isError) {
   const t = $("toast");
-  t.textContent = message;
+  t.innerHTML = "";
+  const span = document.createElement("span");
+  span.textContent = message;
+  const close = document.createElement("button");
+  close.className = "toast-close";
+  close.textContent = "×";
+  close.title = "Закрыть";
+  const hide = () => { t.className = "toast"; t.innerHTML = ""; };
+  close.onclick = hide;
+  t.onclick = hide;
+  t.appendChild(span);
+  t.appendChild(close);
   t.className = "toast show" + (isError ? " err" : "");
-  setTimeout(() => t.className = "toast", isError ? 6000 : 3500);
+  setTimeout(hide, isError ? 8000 : 4500);
 }
 
 function banner(text, cls) {
   const b = $("sendStatus");
-  b.textContent = text;
   b.className = "status show " + cls;
+  b.innerHTML = "";
+  const span = document.createElement("span");
+  span.textContent = text;
+  const close = document.createElement("button");
+  close.className = "status-close";
+  close.textContent = "×";
+  close.title = "Закрыть";
+  close.onclick = () => { b.className = "status"; b.textContent = ""; };
+  b.appendChild(span);
+  b.appendChild(close);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
