@@ -16,4 +16,14 @@ TIMEZONE = os.getenv("TIMEZONE", "Europe/Moscow").strip()
 LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "45"))
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "800"))
 
+# Настройки распознавания речи (faster-whisper, локально и бесплатно)
+# Модель: base (быстрее, ~145 МБ) или small (точнее, ~484 МБ)
+WHISPER_MODEL = os.getenv("WHISPER_MODEL", "base")
+WHISPER_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
+WHISPER_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "ru")
+
+# Папка для временных файлов (голосовые)
+TEMP_DIR = os.getenv("TEMP_DIR", "temp")
+
 DB_PATH = os.getenv("DB_PATH", "reminders.db").strip()

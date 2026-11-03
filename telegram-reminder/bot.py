@@ -1,3 +1,4 @@
+import os
 import logging
 import sys
 import time
@@ -16,6 +17,7 @@ from telegram.ext import (
 import config
 import llm
 import storage
+import stt
 
 
 def local_format(epoch: int) -> str:
@@ -26,7 +28,7 @@ def local_format(epoch: int) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Привет! Я бот-напоминалка.\n\n"
-        "Просто напиши, что и когда напомнить, например:\n"
+        "Просто напиши или отправь голосовое, что и когда напомнить, например:\n"
         "• «Напомни позвонить маме завтра в 18:00»\n"
         "• «Напомни 5 числа вечером купить билеты»\n"
         "• «Напомни через час выпить таблетку»\n\n"
@@ -62,20 +64,22 @@ async def delete_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Не нашёл такое напоминание.")
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw = update.message.text.strip()
-
+async def _process_text(chat_id: int, raw: str, context: ContextTypes.DEFAULT_TYPE):
+    """Разбирает текст и создаёт напоминание, возвращает ответ пользователю."""
     try:
         parsed = llm.parse_message(raw)
     except Exception as e:
         logging.exception("Ошибка парсинга сообщения")
-        await update.message.reply_text(f"😕 Не смог разобрать сообщение: {e}")
+        await context.bot.send_message(
+            chat_id, f"😕 Не смог разобрать сообщение: {e}"
+        )
         return
 
     if parsed is None:
-        await update.message.reply_text(
+        await context.bot.send_message(
+            chat_id,
             "Не понял, что и когда напомнить.\n"
-            "Например: «Напомни позвонить маме завтра в 18:00»"
+            "Например: «Напомни позвонить маме завтра в 18:00»",
         )
         return
 
@@ -84,13 +88,54 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = int(time.time())
 
     if remind_at <= now:
-        await update.message.reply_text("Это время уже в прошлом — напомнить задним числом не получится.")
+        await context.bot.send_message(
+            chat_id, "Это время уже в прошлом — напомнить задним числом не получится."
+        )
         return
 
-    storage.add_reminder(update.effective_chat.id, text, remind_at)
-    await update.message.reply_text(
-        f"✅ Записал: «{text}»\n⏰ {dt_local.strftime('%d.%m.%Y %H:%M')}"
+    storage.add_reminder(chat_id, text, remind_at)
+    await context.bot.send_message(
+        chat_id, f"✅ Записал: «{text}»\n⏰ {dt_local.strftime('%d.%m.%Y %H:%M')}"
     )
+
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await _process_text(update.effective_chat.id, update.message.text.strip(), context)
+
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Принимает голосовое сообщение, распознаёт и обрабатывает как текст."""
+    chat_id = update.effective_chat.id
+    status_msg = await update.message.reply_text("🎙 Распознаю голос…")
+
+    voice = update.message.voice
+    path = os.path.join(config.TEMP_DIR, f"voice_{chat_id}_{voice.file_id}.ogg")
+
+    try:
+        file = await voice.get_file()
+        await file.download_to_drive(path)
+
+        # Распознавание синхронное (CPU) — выносим в поток, чтобы не вешать бота
+        import asyncio
+
+        loop = asyncio.get_running_loop()
+        transcript = await loop.run_in_executor(None, stt.transcribe, path)
+    except Exception as e:
+        logging.exception("Ошибка распознавания голосового")
+        await status_msg.edit_text(f"😕 Не удалось распознать голосовое: {e}")
+        return
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+    if not transcript:
+        await status_msg.edit_text("Не расслышал — повтори, пожалуйста.")
+        return
+
+    await status_msg.edit_text(f"🗣 Ты сказал: «{transcript}»")
+    await _process_text(chat_id, transcript, context)
 
 
 async def tick(context: ContextTypes.DEFAULT_TYPE):
@@ -122,12 +167,14 @@ def main():
         return
 
     storage.init_db()
+    os.makedirs(config.TEMP_DIR, exist_ok=True)
 
     app = Application.builder().token(config.BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("list", list_reminders))
     app.add_handler(CommandHandler("del", delete_reminder))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     app.job_queue.run_repeating(tick, interval=20, first=5)
 
