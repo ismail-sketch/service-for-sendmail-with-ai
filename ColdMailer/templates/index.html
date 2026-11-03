@@ -63,6 +63,14 @@
   .toast.err { border-left-color: #ef4444; }
   .progress-wrap { margin-top: 24px; display: none; }
   .progress-wrap.show { display: block; }
+  .status {
+    display: none; margin-top: 18px; padding: 13px 16px; border-radius: 8px;
+    font-size: 15px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  }
+  .status.show { display: block; }
+  .status.ok { background: #14532d; color: #86efac; border: 1px solid #166534; }
+  .status.err { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+  .status.info { background: #0c4a6e; color: #7dd3fc; border: 1px solid #075985; }
   .bar { height: 12px; border-radius: 20px; background: #1e293b; overflow: hidden; }
   .bar > div { height: 100%; width: 0; background: linear-gradient(90deg,#0ea5e9,#38bdf8); transition: width .3s; }
   .log { margin-top: 16px; background: #020617; border-radius: 8px; padding: 14px; font-family: Consolas, monospace;
@@ -94,6 +102,7 @@
     <p class="hint">Письма отправляются по очереди с паузами. Повторно уже отправленным не уйдёт.</p>
     <button class="primary" id="startBtn">Запустить рассылку</button>
     <button class="ghost" id="testBtn" style="margin-left:10px">Проверить SMTP-соединение</button>
+    <div class="status" id="sendStatus"></div>
 
     <div class="progress-wrap" id="progressWrap">
       <div class="stats">
@@ -178,7 +187,14 @@ function toast(message, isError) {
   const t = $("toast");
   t.textContent = message;
   t.className = "toast show" + (isError ? " err" : "");
-  setTimeout(() => t.className = "toast", 3500);
+  setTimeout(() => t.className = "toast", isError ? 6000 : 3500);
+}
+
+function banner(text, cls) {
+  const b = $("sendStatus");
+  b.textContent = text;
+  b.className = "status show " + cls;
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // --- Навигация ---
@@ -266,8 +282,13 @@ function log(text, cls) {
 $("startBtn").onclick = async () => {
   const res = await fetch("/api/start", { method: "POST" });
   const data = await res.json();
-  if (data.error) return toast(data.error, true);
+  if (data.error) {
+    banner("✖ Ошибка: " + data.error, "err");
+    toast(data.error, true);
+    return;
+  }
 
+  banner("▶ Рассылка запущена. Следите за логом ниже.", "info");
   $("progressWrap").classList.add("show");
   $("startBtn").disabled = true;
   $("log").innerHTML = "";
@@ -277,10 +298,18 @@ $("startBtn").onclick = async () => {
 };
 
 $("testBtn").onclick = async () => {
-  toast("Проверка соединения...");
-  const res = await fetch("/api/test", { method: "POST" });
-  const data = await res.json();
-  toast(data.message || data.error, !!data.error);
+  banner("⏳ Проверяю SMTP-соединение...", "info");
+  try {
+    const res = await fetch("/api/test", { method: "POST" });
+    const data = await res.json();
+    if (data.error) {
+      banner("✖ Ошибка соединения:\n" + data.error, "err");
+    } else {
+      banner("✔ " + data.message, "ok");
+    }
+  } catch (e) {
+    banner("✖ Не удалось связаться с сервером: " + e, "err");
+  }
 };
 
 function updateStats() {
@@ -304,12 +333,17 @@ function listenProgress() {
       log(`✨ Готово! Отправлено: ${ev.sent}, ошибок: ${ev.errors}`, "ok");
       es.close();
       $("startBtn").disabled = false;
+      banner(`✔ Рассылка завершена.\nОтправлено: ${ev.sent}, ошибок: ${ev.errors}`, "ok");
       updateStats();
       loadLeads();
     }
     updateStats();
   };
-  es.onerror = () => { es.close(); $("startBtn").disabled = false; };
+  es.onerror = () => {
+    banner("⚠ Соединение с сервером прервано. Проверьте, что run.bat всё ещё запущен.", "err");
+    es.close();
+    $("startBtn").disabled = false;
+  };
 }
 
 loadSettings();
