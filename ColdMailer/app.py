@@ -187,6 +187,11 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return Response(status=204)
+
+
 @app.route("/api/settings", methods=["GET", "POST"])
 def api_settings():
     if request.method == "POST":
